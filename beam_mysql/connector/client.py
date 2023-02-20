@@ -131,7 +131,7 @@ class MySQLClient:
             else:
                 return total_number
 
-    def record_loader(self, query: str):
+    def record_loader(self, queries: list[str], params: list[tuple] = ()):
         """
         Load dict record into mysql.
 
@@ -141,18 +141,20 @@ class MySQLClient:
         Raises:
             ~beam_mysql.connector.errors.MySQLClientError
         """
-        self._validate_query(query, [_INSERT_STATEMENT])
+        self._validate_query('\n'.join(queries), [_INSERT_STATEMENT])
 
         with _MySQLConnection(self._config) as conn:
             cur = conn.cursor()
 
             try:
-                cur.execute(query)
+                for i in range(len(queries)):
+                    cur.execute(queries[i], params[i])
+                    cur.fetchall()
                 conn.commit()
-                logger.info(f"Successfully execute query: {query}")
+                logger.info(f"Successfully execute query: {queries}")
             except MySQLConnectorError as e:
                 conn.rollback()
-                raise MySQLClientError(f"Failed to execute query: {query}, Raise exception: {e}")
+                raise MySQLClientError(f"Failed to execute query: {queries}, Raise exception: {e}")
 
             cur.close()
 

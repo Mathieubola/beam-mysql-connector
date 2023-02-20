@@ -106,34 +106,33 @@ class _WriteToMySQLFn(beam.DoFn):
     def start_bundle(self):
         self._build_value()
         self._queries = []
+        self._params = []
 
     def process(self, element: Dict, *args, **kwargs):
         columns = []
         values = []
         for column, value in element.items():
             columns.append(column)
-            values.append(value)
+            values.append(value if value else "NULL")
 
         column_str = ", ".join(columns)
-        value_str = ", ".join(
-            [
-                f"{'NULL' if value is None else value}" if isinstance(value, (type(None), int, float)) else f"'{value}'"
-                for value in values
-            ]
-        )
+        value_str = ", ".join(["%s" if v != 'NULL' else "NULL" for v in values])
 
         query = f"INSERT INTO {self._config['database']}.{self._table}({column_str}) VALUES({value_str});"
 
         self._queries.append(query)
+        self._params.append([v for v in values if v != 'NULL'])
 
         if len(self._queries) > self._batch_size:
-            self._client.record_loader("\n".join(self._queries))
+            self._client.record_loader(self._queries, self._params)
             self._queries.clear()
+            self._params.clear()
 
     def finish_bundle(self):
         if len(self._queries):
-            self._client.record_loader("\n".join(self._queries))
+            self._client.record_loader(self._queries, self._params)
             self._queries.clear()
+            self._params.clear()
 
     def _build_value(self):
         for k, v in self._config.items():
